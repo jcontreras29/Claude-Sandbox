@@ -1,0 +1,128 @@
+How to properly run Claude
+
+General mode (no specific project, lands at /workspace):
+$ docker compose run --rm claude
+
+Project mode (lands at /workspace/<project>, so that project's .mcp.json
+and .claude/settings.local.json are discovered correctly):
+$ ./start-project.sh <project>
+
+e.g.
+$ ./start-project.sh social-app
+
+Note: Claude Code only discovers .mcp.json from its current working
+directory (and ancestors), never from subdirectories. Each project's
+MCP servers are defined in that project's own .mcp.json and will only
+load when the session's working directory matches that project's root.
+Running general mode will NOT load any project's MCP servers.
+
+Resuming a previous session:
+Conversation history persists across container restarts (it lives in
+./claude-home on the host, not inside the container), so you can pick
+up exactly where you left off even after the container was removed or
+the machine was rebooted. Extra arguments are forwarded to `claude`:
+
+$ ./start-project.sh social-app --resume      # pick from a list (shows session names)
+$ ./start-project.sh social-app --continue    # resume the most recent one directly
+
+Make sure to pass the same project name you used originally, since
+session history is keyed by working directory.
+
+Default to Plan Mode:
+Every session (any project, general mode too) starts in Plan Mode by
+default - Claude reads/explores and writes a plan, then needs explicit
+approval (ExitPlanMode) before taking any real action. Set via
+`"permissions": {"defaultMode": "plan"}` in claude-config/managed-settings.json
+(baked into the image, applies globally, same file the bash hook uses).
+
+Caveat: this is a default, not an absolute lock like the bash hook or
+the firewall. Claude Code's own precedence order is `--permission-mode`
+CLI flag > managed/user/project `defaultMode` > built-in default - so
+`claude --permission-mode bypassPermissions` would still override it.
+Neither start-project.sh nor docker-entrypoint.sh ever pass that flag,
+so this only matters if someone launches the container with a custom
+command that does. The agent itself has no tool to change its own
+top-level permission mode mid-session.
+
+Network firewall:
+All outbound network access from the sandbox is restricted to an
+explicit domain allowlist, adapted from Anthropic's own reference
+firewall:
+https://github.com/anthropics/claude-code/blob/main/.devcontainer/init-firewall.sh
+
+Currently allowed:
+- GitHub (full published IP ranges, for git clone/fetch/push)
+- registry.npmjs.org       (npm/npx package installs)
+- api.anthropic.com        (Claude Code itself - required for it to function)
+- sentry.io, statsig.com   (Claude Code telemetry)
+- fcycwkxtxpaodtusibvt.supabase.co, api.supabase.com, supabase.com
+                           (social-app's `supabase` MCP server - supabase.com
+                           itself is needed too, not just the api./project
+                           subdomains: one tool fetches a GraphQL schema from
+                           supabase.com/docs/api/graphql at runtime)
+- expo.dev, api.expo.dev, exp.host
+                           (Expo/EAS tooling for social-app)
+- developer.repebble.com, developer.rebble.io
+                           (official Pebble SDK docs, current site + older
+                           Rebble copy, for wizards-watchface)
+- DNS (port 53) and the docker bridge's own host network
+
+How it works:
+The container starts as root, runs claude-config/init-firewall.sh
+(baked into the image at /usr/local/bin/init-firewall.sh) to set up
+iptables + an ipset allowlist, THEN drops to the unprivileged `node`
+user to run the actual claude process, via `setpriv`
+(claude-config/docker-entrypoint.sh). Switching away from root like
+this means the running agent ends up with zero capabilities, even
+though the container itself has NET_ADMIN/NET_RAW in its capability
+bounding set (needed for iptables/ipset to work at all) - so the agent
+can never see, modify, or disable the firewall rules once they're set.
+Same pattern Anthropic's own devcontainer uses.
+
+Adding a new MCP server (do both steps, or it will silently fail to
+connect - same class of silent failure as the original MCP setup):
+1. Add the server to the relevant project's .mcp.json as usual.
+2. Identify EVERY domain that server's own runtime traffic needs - not
+   just the npm registry for `npx` to install it, and not just its
+   "main" API host. A server can call multiple, unrelated domains for
+   different tools - e.g. the supabase server talks to api.supabase.com
+   AND <project-ref>.supabase.co AND, for one specific tool, the
+   completely separate supabase.com docs/marketing domain (a GraphQL
+   schema fetch). The most reliable way to find the full list: install
+   the package once (`npx -y <pkg>@latest --help` is enough to
+   populate the npm cache), then grep its installed source for
+   domains, or just drive it through a real MCP tools/list call and
+   watch for "fetch failed" pointing at an unlisted host. A quick way
+   to test connectivity to a specific host directly: run
+     node -e 'fetch("https://HOST").then(r=>console.log(r.status)).catch(e=>console.error(e))'
+   as the node user, after init-firewall.sh has run.
+3. Add every domain found to the `for domain in` list in
+   claude-config/init-firewall.sh.
+4. `docker compose build` to bake the new rule in. The firewall is
+   only (re)read at container start, so a plain restart without
+   rebuilding will NOT pick up a source-file edit - rebuilding is what
+   actually matters.
+5. Relaunch the project session and confirm via `/mcp` that it
+   connects AND that fetching tools succeeds (not just "Reconnected" -
+   a server can connect over stdio fine and still fail later when a
+   specific tool makes its first network call to an unlisted domain).
+
+Adding any other allowed domain (not tied to an MCP server) works the
+same way: edit the list in claude-config/init-firewall.sh, rebuild.
+
+Known limitations (defense in depth, not a perfect boundary):
+- DNS (UDP port 53) is allowed to any destination, which is a known,
+  accepted side-channel (DNS tunneling could exfiltrate small amounts
+  of data). Matches the upstream reference script's own tradeoff.
+- Domains are resolved to IPs once at container startup (except
+  GitHub, which uses its published CIDR ranges instead). A CDN-backed
+  domain returning different IPs on different queries could
+  intermittently fail until the container is restarted/rebuilt.
+- GitHub-adjacent CDN hosts outside the web/api/git meta keys (e.g.
+  some codeload.github.com/objects.githubusercontent.com paths) aren't
+  guaranteed to be covered - add them explicitly if something breaks.
+- The `--entrypoint bash` debug shell (see above) bypasses the
+  firewall AND the privilege drop entirely - it runs as root with full
+  network access. It's a deliberate human-operated escape hatch for
+  troubleshooting only; the agent itself can never reach it from
+  inside a session.

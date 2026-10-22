@@ -1,0 +1,70 @@
+
+services:
+  claude:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    working_dir: /workspace
+    init: true
+    stdin_open: true
+    tty: true
+
+    # Secrets passed through by name only; values come from the host
+    # shell (see start-project.sh), never from a file in this repo.
+    environment:
+      - SUPABASE_ACCESS_TOKEN
+      - GITHUB_PERSONAL_ACCESS_TOKEN
+
+    # Share only the project workspace and Claude's
+    # dedicated persistent configuration directory.
+    volumes:
+      - ./workspace:/workspace
+      - ./claude-home:/home/node/.claude
+
+    # Restrict container privileges. NET_ADMIN/NET_RAW are added back
+    # only for the egress firewall (iptables/ipset), and SETUID/SETGID
+    # only for the one-time setpriv privilege drop - both happen as
+    # root at startup in docker-entrypoint.sh. The actual claude process
+    # that runs afterward drops to the unprivileged node user and loses
+    # all of these capabilities entirely (switching away from UID 0 to
+    # exec a binary with no file capabilities zeroes the resulting
+    # process's capability set, regardless of the container's bounding
+    # set - see claude-config/docker-entrypoint.sh).
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SETUID
+      - SETGID
+
+    security_opt:
+      - no-new-privileges:true
+
+    # Make the container filesystem read-only except
+    # for the writable mounts and temporary directory.
+    read_only: true
+
+    tmpfs:
+      # exec is required: npm_config_cache points at /tmp/npm-cache,
+      # and npx needs to execute the package binaries it installs there.
+      # Docker's tmpfs default is noexec unless overridden explicitly.
+      - /tmp:rw,exec,nosuid,nodev,size=1g
+      # iptables needs a writable /run/xtables.lock to set up the
+      # egress firewall at startup.
+      - /run:rw,nosuid,nodev,noexec,size=16m
+
+    pids_limit: 512
+
+    # Keep the container on an ordinary isolated
+    # Docker bridge network. Internet access remains
+    # available; outbound destinations are not filtered.
+    networks:
+      - claude-net
+
+networks:
+  claude-net:
+    driver: bridge
+
+
