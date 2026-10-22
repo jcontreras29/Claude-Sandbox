@@ -22,8 +22,8 @@ Conversation history persists across container restarts (it lives in
 up exactly where you left off even after the container was removed or
 the machine was rebooted. Extra arguments are forwarded to `claude`:
 
-$ ./start-project.sh social-app --resume      # pick from a list (shows session names)
-$ ./start-project.sh social-app --continue    # resume the most recent one directly
+$ ./start-project.sh <project> --resume      # pick from a list (shows session names)
+$ ./start-project.sh <project> --continue    # resume the most recent one directly
 
 Make sure to pass the same project name you used originally, since
 session history is keyed by working directory.
@@ -56,7 +56,7 @@ Currently allowed:
 - api.anthropic.com        (Claude Code itself - required for it to function)
 - sentry.io, statsig.com   (Claude Code telemetry)
 - *.supabase.co, api.supabase.com, supabase.com
-                           (social-app's `supabase` MCP server - supabase.com
+                           (<project>'s `supabase` MCP server - supabase.com
                            itself is needed too, not just the api./project
                            subdomains: one tool fetches a GraphQL schema from
                            supabase.com/docs/api/graphql at runtime)
