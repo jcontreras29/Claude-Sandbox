@@ -75,7 +75,7 @@ for domain in \
     "api.anthropic.com" \
     "sentry.io" \
     "statsig.com" \
-    "fcycwkxtxpaodtusibvt.supabase.co" \
+    "*.supabase.co" \
     "api.supabase.com" \
     "supabase.com" \
     "expo.dev" \
