@@ -81,7 +81,7 @@ Any arguments after the project name are passed straight to `claude`. Session hi
 Put (or clone) the project into `workspace/`:
 
 ```bash
-git clone https://github.com/you/my-app.git workspace/my-app
+git clone https://github.com/jcontreras29/Claude-Sandbox.git workspace/my-app
 ./start-project.sh my-app
 ```
 
