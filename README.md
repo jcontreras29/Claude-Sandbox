@@ -54,7 +54,7 @@ The sandbox uses several layers. No single one is perfect, so they're meant to b
 ## Quick start
 
 ```bash
-git clone https://github.com/<you>/<this-repo>.git claude-sandbox
+git clone https://github.com/jcontreras29/Claude-Sandbox.git claude-sandbox
 cd claude-sandbox
 mkdir -p workspace claude-home
 
