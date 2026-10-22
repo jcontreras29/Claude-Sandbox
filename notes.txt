@@ -8,7 +8,7 @@ and .claude/settings.local.json are discovered correctly):
 $ ./start-project.sh <project>
 
 e.g.
-$ ./start-project.sh social-app
+$ ./start-project.sh <project>
 
 Note: Claude Code only discovers .mcp.json from its current working
 directory (and ancestors), never from subdirectories. Each project's
