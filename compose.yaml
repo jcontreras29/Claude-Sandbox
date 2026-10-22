@@ -59,7 +59,7 @@ services:
 
     # Keep the container on an ordinary isolated
     # Docker bridge network. Internet access remains
-    # available;
+    # available; outbound traffic is filtered.
     networks:
       - claude-net
 
