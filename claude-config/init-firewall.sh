@@ -75,7 +75,7 @@ for domain in \
     "api.anthropic.com" \
     "sentry.io" \
     "statsig.com" \
-    "*.supabase.co" \
+    "<your-supabase-project>.supabase.co" \
     "api.supabase.com" \
     "supabase.com" \
     "expo.dev" \
