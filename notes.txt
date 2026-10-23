@@ -55,7 +55,7 @@ Currently allowed:
 - registry.npmjs.org       (npm/npx package installs)
 - api.anthropic.com        (Claude Code itself - required for it to function)
 - sentry.io, statsig.com   (Claude Code telemetry)
-- *.supabase.co, api.supabase.com, supabase.com
+- <your-supabase-project>.supabase.co, api.supabase.com, supabase.com
                            (<project>'s `supabase` MCP server - supabase.com
                            itself is needed too, not just the api./project
                            subdomains: one tool fetches a GraphQL schema from
